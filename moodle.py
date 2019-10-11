@@ -80,35 +80,32 @@ class Moodleuser:
         self.__password = password
         self._session = self.__Login()  # login
         self._courses = self.__ListCourses()  # courselist + name
+
         for course in self._courses[0]:
-            if not course[1] in ignore_courses and course[2] == current_semester:
-                Course({"id": course[1], "name": course[0], "semester": course[2], "location": "moodle", "session": self._session})
+            if not course[0] in ignore_courses: # and course[2] == current_semester: # this is terrible, but for now we cant access the semester
+                Course({"id": course[0], "name": course[1], "semester": "WiSe19/20", "location": "moodle", "session": self._session})
 
     def __Login(self):
         s = requests.Session()
-        s.get(
-            "https://www.moodle.tum.de/Shibboleth.sso/Login?providerId=https%3A%2F%2Ftumidp.lrz.de%2Fidp%2Fshibboleth&target=https%3A%2F%2Fwww.moodle.tum.de%2Fauth%2Fshibboleth%2Findex.php",
-            allow_redirects=True)
-        headers = {'Content-Type': 'application/x-www-form-urlencoded', "Origin": "https://tumidp.lrz.de",
-                   "Connection": "keep-alive", "Content-Length": "74"}
-        auth = s.post("https://tumidp.lrz.de/idp/profile/SAML2/Redirect/SSO?execution=e1s1", headers=headers,
-                      data={"j_username": self._username, "j_password": self.__password, "_eventId_proceed": "",
-                            "donotcache": "1"}, allow_redirects=False)
+        s.get("https://moodle.rwth-aachen.de/auth/shibboleth/index.php")
+        auth = s.post("https://sso.rwth-aachen.de/idp/profile/SAML2/Redirect/SSO?execution=e1s1",
+              data={"j_username": self._username, "j_password": self.__password, "_eventId_proceed": "",
+                    "donotcache": "1"})
         resp = re.search(r"SAMLResponse\" value=\"(.*)\"/>", auth.text)
         s.cookies = requests.utils.add_dict_to_cookiejar(s.cookies, {
-            "_shibstate_123": "https%3A%2F%2Fwww.moodle.tum.de%2Fauth%2Fshibboleth%2Findex.php"})
-        s.post("https://www.moodle.tum.de/Shibboleth.sso/SAML2/POST", allow_redirects=True,
+            "_shibstate_123": "https%3A%2F%2Fmoodle.rwth-aachen.de%2Fauth%2Fshibboleth%2Findex.php"})
+        s.post("https://moodle.rwth-aachen.de/Shibboleth.sso/SAML2/POST", allow_redirects=True,
                data={"SAMLResponse": resp.groups()[0], "RelayState": "cookie:123"})
         return s
 
     def __ListCourses(self):
-        url = "https://www.moodle.tum.de/my/?lang=de"
+        url = "https://moodle.rwth-aachen.de/my/index.php?lang=de"
         response = self._session.get(url).text
-        if response.find("<title>Meine Startseite</title>") > -1:
+        if response.find("<title>Dashboard</title>") > -1:
             courselist = re.findall(
-                r"<a title=\"(.*?)\" href=\"https://www\.moodle\.tum\.de/course/view\.php\?id=([0-9]*)\">.*?coc-metainfo\">\((.*?)  \|",
+                r"href=\"https://moodle\.rwth-aachen\.de/course/view\.php\?id=([0-9]*)\">(.*?) \(",
                 response, re.MULTILINE)
-            fullname = re.search(r'<span class="usertext mr-1">(.*)</span>', response).groups(1)[0]
+            fullname = re.search(r'<span class="usertext mr-1">(.*?)</span>', response).groups(1)[0]
             return [courselist, fullname]
         else:
             return [[], ""]
@@ -122,7 +119,7 @@ class Course:
         self._session = course["session"] if "session" in course else requests.session()
         self._changes = []
         self._semester = course["semester"]
-        self._location= course["location"]
+        self._location = course["location"]
         self._url = course["url"] if "url" in course else ""
         if course["location"] == "moodle":
             self.__GetContent()
@@ -166,7 +163,7 @@ class Course:
                 self._parsepdf()
 
         # Hier kommt jetzt die Ausgabe oder sowas von allen Änderungen, die in self._changes gespeichert sind
-        self.__PropagateChanges()
+        #self.__PropagateChanges()
 
     def _parsepdf(self):
         jar = requests.cookies.RequestsCookieJar()
@@ -183,11 +180,10 @@ class Course:
                 if ret is not None:
                     self._changes.append(ret)
 
-
     def __GetContent(self):
-        r = self._session.get("https://www.moodle.tum.de/course/view.php?id=" + str(self._courseid) + "&lang=de")
+        r = self._session.get("https://moodle.rwth-aachen.de/course/view.php?id=" + str(self._courseid) + "&lang=de")
         soup = BeautifulSoup(r.content, "lxml")
-        if "<title>Kurs:" in r.text:
+        if "<title>Kurs:" in r.text or "<title>Course:" in r.text:
             cont = soup.select(".course-content")
             cont = re.sub(r'( (?:aria\-owns=\"|id=\")random[0-9a-f]*_group\")', "", str(cont))
             cont = re.sub(r"(<img.*?>)", "", cont)
@@ -203,7 +199,7 @@ class Course:
         content = self.__content
         # split in blocks first
         soup = BeautifulSoup(content, "lxml")
-        blocks = soup.select(".mod-indent")
+        blocks = soup.select(".mod-indent-outer")
         blocks2 = soup.select(".summary p")
         bl = list()
         for block in blocks2:
@@ -213,7 +209,7 @@ class Course:
                 for change in b._changelist["values"]:
                     self._changes.append(change)
         for block in blocks:
-            b = Block(block.next_sibling.contents[0], self._courseid, self._session)
+            b = Block(block.contents[1].contents[0], self._courseid, self._session)
             bl.append(b)
             if b._changelist["type"] != "none":
                 for change in b._changelist["values"]:
@@ -225,7 +221,7 @@ class Course:
         if len(self._changes) > 0:
             counter = 0
             if self._location == "moodle" or self._location == "moodle_basic":
-                message = {0: "Änderungen im Kurs <a href=\"https://www.moodle.tum.de/course/view.php?id=" + str(
+                message = {0: "Änderungen im Kurs <a href=\"https://moodle.rwth-aachen.de/course/view.php?id=" + str(
                     self._courseid) + "\">" + self._coursename + "</a> erkannt:"}
             elif self._location == "default":
                 message = {0: "Änderungen im Kurs <a href=\"" + str(
@@ -297,7 +293,7 @@ class Block:
                                                   BBlock.title == self._title).first()
         if not blockentry:
             # create block
-            # print("Adding " + self._url + " " + self._title + " " + self._cont)
+            print("Adding " + self._url + " " + self._title + " " + self._cont)
             new_block = BBlock(url=self._url, cont=self._cont, type=self.__type, course=self._course, title=self._title)
             session.add(new_block)
             session.commit()
@@ -310,7 +306,7 @@ class Block:
             else:
                 # speichern des Blockinhalts
                 self._changelist = {"type": "text", "values": [{"type": "text", "cont": self._cont}]}
-        if not not blockentry and re.match(r"https:\/\/www\.moodle\.tum\.de\/mod\/(folder|lti)\/.*?id=([0-9]*)",
+        if not not blockentry and re.match(r"https:\/\/moodle\.rwth-aachen\.de\/mod\/(folder|lti)\/.*?id=([0-9]*)",
                                            self._url) is not None:
             # Scan von Ordnern
             link = Link(self)
@@ -329,8 +325,8 @@ class Link:
         self._session = blockself._session
         self._errorcounter = 0
         self._ftitle = blockself._firsttitle if hasattr(blockself, "_firsttitle") else ""
-        normallink = re.match(r"https:\/\/www\.moodle\.tum\.de\/mod\/(.*?)\/.*?id=([0-9]*)", self._url)
-        dllink = re.match(r"https://www\.moodle\.tum\.de/pluginfile\.php/([0-9]*)/mod_folder/content/0/(.*)", self._url)
+        normallink = re.match(r"https:\/\/moodle\.rwth-aachen\.de\/mod\/(.*?)\/.*?id=([0-9]*)", self._url)
+        dllink = re.match(r"https://moodle\.rwth-aachen\.de/pluginfile\.php/([0-9]*)/mod_folder/content/0/(.*)", self._url)
         if normallink is not None:
             self._urltype = normallink.groups(1)[0]
             self._id = int(normallink.groups(1)[1])
@@ -361,13 +357,13 @@ class Link:
         # Download filelist
         self._values = []
         try:
-            r = self._session.get("https://www.moodle.tum.de/mod/folder/view.php?id=" + str(self._id))
+            r = self._session.get("https://moodle.rwth-aachen.de/mod/folder/view.php?id=" + str(self._id))
         except requests.exceptions.ChunkedEncodingError:
             self._errorcounter += 1
             if self._errorcounter < 10:
                 self.__ParseFolder(self)
             else:
-                raise NameError('Parsing of folder failed more than 10 times, url:https://www.moodle.tum.de/mod/folder/view.php?id='+str(self._id))
+                raise NameError('Parsing of folder failed more than 10 times, url:https://moodle.rwth-aachen.de/mod/folder/view.php?id='+str(self._id))
         soup = BeautifulSoup(r.text, "lxml")
         files = soup.select(".fp-filename-icon")
         for file in files:
@@ -399,7 +395,7 @@ def processfile(file):
         # file is not yet saved
         # check first if the file is downloadable
         test=file["session"].head(file["url"])
-        if test.status_code != 200 and test.status_code!=303:
+        if test.status_code != 200 and test.status_code != 303:
             return None
         # now download
         filename = download(file["url"], file["session"])
@@ -514,12 +510,13 @@ def processothercontent():
     for course in courses:
         Course(course.__dict__)
 
+
 print("Processing Moodle:")
 moodle = Moodleuser(config['DEFAULT']['Username'], config['DEFAULT']['Password'])
 # process all content outside of Moodle
 print("Processing other content: ")
-processothercontent()
+#processothercontent()
 
 # finally process all videos
-print("Processing Videos:")
-ProcessVideos(config['DEFAULT']['Username'], config['DEFAULT']['Password'], moodle._session)
+#print("Processing Videos:")
+#ProcessVideos(config['DEFAULT']['Username'], config['DEFAULT']['Password'], moodle._session)

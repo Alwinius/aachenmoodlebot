@@ -1,0 +1,11 @@
+[Unit]
+Description=Moodle Bot Daemon
+
+[Service]
+Type=simple
+WorkingDirectory=/home/alwin/bots/rwthmoodlebot
+ExecStart=/home/alwin/bots/rwthmoodlebot/venv/bin/python moodle_daemon.py
+User=alwin
+
+[Install]
+WantedBy=multi-user.target

@@ -29,7 +29,7 @@ config.read('config/config.ini')
 updater = Updater(token=config['DEFAULT']['BotToken'])
 dispatcher = updater.dispatcher
 
-default_semester = "WiSe 2016-17"
+default_semester = "WiSe19/20"
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -59,9 +59,9 @@ def CheckUser(bot, update, arg=None):
         session.add(new_user)
         session.commit()
         new_usr = copy.deepcopy(new_user)
-        message = "Dieser Bot bietet Zugriff auf alle Moodle-Dateien zum Bachelor Elektro- und Informationstechnik ab " \
-                  "WS16/17. "
-        bot.sendMessage(chat_id=chat.id, text=message, reply_markup=telegram.ReplyKeyboardHide())
+        message = "Dieser Bot bietet Zugriff auf alle Moodle-Dateien zu ausgewählten Fächern vom Master Computer Engineering ab " \
+                  "WS19/20. "
+        bot.sendMessage(chat_id=chat.id, text=message, reply_markup=telegram.ReplyKeyboardRemove())
         session.close()
         return new_usr
     else:
@@ -156,7 +156,7 @@ def ShowCourseContent(bot, update, arg):
                 entries[0].coursedata.url) + "): \n"}
         else:
             message = {0: "Dateien zu [" + entries[0].coursedata.name.replace("[", "(").replace("]",
-                   ")") + "](https://www.moodle.tum.de/course/view.php?id=" + str(entries[0].course) + "): \n"}
+                   ")") + "](https://moodle.rwth-aachen.de/course/view.php?id=" + str(entries[0].course) + "): \n"}
     else:
         message = {0: "Noch keine Dateien vorhanden."}
     counter = 0
@@ -197,7 +197,7 @@ def ShowVideoContent(bot, update, arg):
                 entries[0].coursedata.url) + "): \n"}
         else:
             message = {0: "Videos zu [" + entries[0].coursedata.name.replace("[", "(").replace("]",
-                   ")") + "](https://www.moodle.tum.de/course/view.php?id=" + str(entries[0].course) + "): \n"}
+                   ")") + "](https://moodle.rwth-aachen.de/course/view.php?id=" + str(entries[0].course) + "): \n"}
     else:
         message = {0: "Noch keine Videos vorhanden."}
     counter = 0
@@ -250,8 +250,8 @@ def About(bot, update):
     reply_markup = InlineKeyboardMarkup(button_list)
     bot.sendMessage(chat_id=update.message.chat_id,
                     text="Dieser Bot wurde erstellt von @Alwinius. Der Quellcode ist unter "
-                         "https://github.com/Alwinius/tummoodlebot verfügbar.\nWeitere interessante Bots: \n - "
-                         "@tummensabot\n - @mydealz_bot\n - @tumroomsbot",
+                         "https://github.com/Alwinius/rwthmoodlebot verfügbar.\nWeitere interessante Bots: \n - "
+                         "@tummensabot\n - @mydealz_bot\n - @tumroomsbot\n - @tummoodlebot",
                     reply_markup=reply_markup)
 
 
@@ -337,6 +337,7 @@ dispatcher.add_handler(filehandler)
 fallbackhandler = MessageHandler(Filters.text, Start)
 dispatcher.add_handler(fallbackhandler)
 
-updater.start_webhook(listen='localhost', port=4214, webhook_url=config['DEFAULT']['WebHookUrl'])
+updater.start_webhook(listen='localhost', port=config['DEFAULT']['LocalPort'], webhook_url=config['DEFAULT']['WebHookUrl'])
+updater.bot.set_webhook(config['DEFAULT']['WebHookUrl'])
 updater.idle()
 updater.stop()
