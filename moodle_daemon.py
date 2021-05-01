@@ -161,7 +161,7 @@ def ShowCourseContent(bot, update, arg):
         message = {0: "Noch keine Dateien vorhanden."}
     counter = 0
     for ent in entries:
-        toadd = "[" + ent.title + "](https://t.me/tummoodle/" + ent.message_id + ")\n" if ent.message_id != "0" else "[" + ent.title + " (extern)](" + ent.url + ")\n"
+        toadd = "[" + ent.title + "](https://t.me/" + config["DEFAULT"]["FilesChannelName"] + "/" + ent.message_id + ")\n" if ent.message_id != "0" else "[" + ent.title + " (extern)](" + ent.url + ")\n"
         if len(message[counter] + toadd) > 4096:
             counter += 1
             message[counter] = toadd

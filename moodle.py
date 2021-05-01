@@ -163,7 +163,7 @@ class Course:
                 self._parsepdf()
 
         # Hier kommt jetzt die Ausgabe oder sowas von allen Änderungen, die in self._changes gespeichert sind
-        #self.__PropagateChanges()
+        self.__PropagateChanges()
 
     def _parsepdf(self):
         jar = requests.cookies.RequestsCookieJar()
